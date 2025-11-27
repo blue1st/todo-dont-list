@@ -1,75 +1,49 @@
-# Nuxt Minimal Starter
+# Todo & Don't List
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+「やるべきこと（Todo）」と「やってはいけないこと（Don't）」を管理するためのシンプルなアプリケーションです。
+Nuxt 3 で構築されており、PWA（Progressive Web App）として動作するため、オフラインでも利用可能です。
 
-## Setup
+## 特徴
 
-Make sure to install dependencies:
+- **Todo (Do) タスクの管理**: 通常のタスク管理機能です。完了したタスクにチェックを入れることができます。
+- **Don't タスクの管理**: 「SNSを見ない」「お菓子を食べない」といった、悪い習慣を断つためのタスクです。
+    - ボタンを押すと、指定した時間（例: 30分、1時間）の間、そのタスクが「抑制（Suppression）」状態になります。
+    - 抑制期間中はカウントダウンが表示され、再実行（ボタン押下）ができなくなります。
+- **柔軟な時間指定**: Don't タスクの抑制時間は、分 (`m`)、時間 (`h`)、日 (`d`) で指定可能です（例: `30m`, `1h`, `0.5d`）。
+- **データ永続化**: データはブラウザの IndexedDB (Dexie.js) に保存されるため、リロードしても消えません。
+- **PWA 対応**: アプリとしてインストール可能で、オフラインでも動作します。
+
+## 技術スタック
+
+- **Framework**: [Nuxt 3](https://nuxt.com/)
+- **UI Library**: Vue.js 3
+- **Database**: [Dexie.js](https://dexie.org/) (IndexedDB wrapper)
+- **PWA**: [@vite-pwa/nuxt](https://vite-pwa-org.netlify.app/)
+- **Hosting**: GitHub Pages
+
+## 開発環境のセットアップ
+
+依存関係をインストールします:
 
 ```bash
-# npm
 npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
 ```
 
-## Development Server
-
-Start the development server on `http://localhost:3000`:
+開発サーバーを起動します:
 
 ```bash
-# npm
 npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
 ```
 
-## Production
+ブラウザで `http://localhost:3000` にアクセスしてください。
 
-Build the application for production:
+## プロダクションビルド
 
 ```bash
-# npm
 npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
 ```
 
-Locally preview production build:
+## デプロイ
 
-```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+このプロジェクトは GitHub Actions を使用して GitHub Pages に自動デプロイされるように設定されています。
+`main` ブランチにプッシュすると、自動的にビルドとデプロイが行われます。
