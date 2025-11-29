@@ -9,6 +9,7 @@
           @keydown.enter="handleEnter" 
           placeholder="Add a new task..." 
           type="text"
+          class="task-input"
         />
         <select v-model="newTodoType">
           <option value="do">Do</option>
@@ -64,7 +65,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
+import { useHead } from '#app';
 import { db, type Todo } from './utils/db';
+
+useHead({
+  title: "Todo & Don't List"
+})
+
 import { liveQuery } from 'dexie';
 
 const newTodoTitle = ref('');
@@ -322,5 +329,15 @@ button:hover {
   color: #999;
   font-style: italic;
   margin-top: 2rem;
+}
+
+@media (max-width: 600px) {
+  .input-row {
+    flex-wrap: wrap;
+  }
+  
+  .task-input {
+    flex: 1 1 100%;
+  }
 }
 </style>

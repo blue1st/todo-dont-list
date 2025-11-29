@@ -2,6 +2,9 @@
 export default defineNuxtConfig({
   app: {
     baseURL: '/todo-dont-list/',
+    head: {
+      title: "Todo & Don't List",
+    },
   },
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
@@ -9,8 +12,8 @@ export default defineNuxtConfig({
   pwa: {
     registerType: 'autoUpdate',
     manifest: {
-      name: 'Nuxt Todo PWA',
-      short_name: 'NuxtTodo',
+      name: "Todo & Don't List",
+      short_name: "TodoDont",
       theme_color: '#ffffff',
       icons: [
         {
