@@ -339,5 +339,9 @@ button:hover {
   .task-input {
     flex: 1 1 100%;
   }
+
+  .meta {
+    display: none;
+  }
 }
 </style>
