@@ -2,6 +2,37 @@
   <div class="container">
     <h1>Todo & Don't List</h1>
     
+    <div class="progress-section">
+      <div class="progress-label">
+        <span @click="showSettings = !showSettings" class="settings-toggle" title="Settings">⚙️</span>
+        Day Progress: {{ Math.round(dayProgress) }}%
+      </div>
+      
+      <div v-if="showSettings" class="settings-panel">
+        <div class="setting-group">
+          <label>Start:</label>
+          <input type="number" v-model="startHour" @change="saveSettings" min="0" max="23" class="time-input"> :
+          <input type="number" v-model="startMinute" @change="saveSettings" min="0" max="59" class="time-input">
+        </div>
+        <div class="setting-group">
+          <label>End:</label>
+          <input type="number" v-model="endHour" @change="saveSettings" min="1" max="30" class="time-input"> :
+          <input type="number" v-model="endMinute" @change="saveSettings" min="0" max="59" class="time-input">
+        </div>
+      </div>
+
+      <div 
+        class="progress-bar-container"
+        @mouseenter="showTooltip = true"
+        @mouseleave="showTooltip = false"
+      >
+        <div class="progress-bar" :style="{ width: `${dayProgress}%` }"></div>
+        <div v-if="showTooltip" class="tooltip" :style="{ left: `${dayProgress}%` }">
+          Remaining: {{ remainingTimeString }}
+        </div>
+      </div>
+    </div>
+
     <div class="input-group">
       <div class="input-row">
         <input 
@@ -79,16 +110,111 @@ useHead({
 })
 
 import { liveQuery } from 'dexie';
+import { computed } from 'vue';
 
 const newTodoTitle = ref('');
 const newTodoType = ref<'do' | 'dont'>('do');
 const newTodoDuration = ref<string>('30m'); // Default 30 mins
 const todos = ref<Todo[]>([]);
 const now = ref(Date.now());
+// Settings
+const startHour = ref(0);
+const startMinute = ref(0);
+const endHour = ref(24);
+const endMinute = ref(0);
+const showSettings = ref(false);
+const showTooltip = ref(false);
+
+const dayProgress = computed(() => {
+  const date = new Date(now.value);
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+
+  const dayEndTotalMinutes = endHour.value * 60 + endMinute.value;
+  // Handle overnight wrapping logic
+  // If end is > 24 hours (1440 mins)
+  if (dayEndTotalMinutes > 1440) {
+      // If current time is "early morning" but less than the overflow part
+      const overflowMinutes = dayEndTotalMinutes - 1440;
+      const currentMinutesSimple = hours * 60 + minutes;
+      if (currentMinutesSimple < overflowMinutes) {
+          hours += 24;
+      }
+  }
+
+  const currentTotalSeconds = hours * 3600 + minutes * 60 + seconds;
+  const startSeconds = (startHour.value * 3600) + (startMinute.value * 60);
+  const endSeconds = (endHour.value * 3600) + (endMinute.value * 60);
+  const rangeSeconds = endSeconds - startSeconds;
+
+  if (rangeSeconds <= 0) return 0;
+
+  const progressSeconds = currentTotalSeconds - startSeconds;
+  const percentage = (progressSeconds / rangeSeconds) * 100;
+
+  return Math.min(Math.max(percentage, 0), 100);
+});
+
+const remainingTimeString = computed(() => {
+  const date = new Date(now.value);
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  
+  const dayEndTotalMinutes = endHour.value * 60 + endMinute.value;
+  
+  if (dayEndTotalMinutes > 1440) {
+      const overflowMinutes = dayEndTotalMinutes - 1440;
+      const currentMinutesSimple = hours * 60 + minutes;
+      if (currentMinutesSimple < overflowMinutes) {
+          hours += 24;
+      }
+  }
+
+  const currentTotalMinutes = hours * 60 + minutes;
+  let remainingMinutes = dayEndTotalMinutes - currentTotalMinutes;
+
+  if (remainingMinutes < 0) remainingMinutes = 0;
+
+  const h = Math.floor(remainingMinutes / 60);
+  const m = remainingMinutes % 60;
+  return `${h}h ${m}m`;
+});
+
+function saveSettings() {
+  localStorage.setItem('todo-dont-settings', JSON.stringify({
+    start: { h: startHour.value, m: startMinute.value },
+    end: { h: endHour.value, m: endMinute.value }
+  }));
+}
 
 // Update 'now' every second to drive the timer
 let timerInterval: number;
 onMounted(() => {
+  // Load settings
+  const saved = localStorage.getItem('todo-dont-settings');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      // Handle legacy format (simple numbers) vs new object format
+      if (typeof parsed.start === 'number') {
+         startHour.value = parsed.start;
+         startMinute.value = 0;
+      } else if (parsed.start) {
+         startHour.value = Number(parsed.start.h) || 0;
+         startMinute.value = Number(parsed.start.m) || 0;
+      }
+
+      if (typeof parsed.end === 'number') {
+         endHour.value = parsed.end;
+         endMinute.value = 0;
+      } else if (parsed.end) {
+         endHour.value = Number(parsed.end.h) || 24;
+         endMinute.value = Number(parsed.end.m) || 0;
+      }
+    } catch (e) { console.error('Failed to load settings', e); }
+  }
+
   timerInterval = window.setInterval(() => {
     now.value = Date.now();
   }, 1000);
@@ -225,7 +351,92 @@ body {
 h1 {
   text-align: center;
   color: #2c3e50;
+  margin-bottom: 1rem;
+}
+
+.progress-section {
   margin-bottom: 2rem;
+  padding: 0 10px;
+}
+
+.progress-label {
+  text-align: right;
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.progress-bar-container {
+  height: 8px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  overflow: visible; /* To allow tooltip overflow */
+  position: relative;
+  cursor: pointer;
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: #42b883;
+  width: 0%; /* Default */
+  /* Remove transition for smoother updates or keep it? Keep for now. */
+  transition: width 0.5s linear;
+}
+
+.settings-toggle {
+  cursor: pointer;
+  margin-right: 5px;
+  user-select: none;
+}
+
+.settings-panel {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  background: #f8f8f8;
+  padding: 8px;
+  border-radius: 4px;
+  align-items: center;
+}
+
+.setting-group {
+  display: flex;
+  align-items: center;
+}
+
+.time-input {
+  width: 40px;
+  padding: 4px;
+  margin: 0 4px;
+  text-align: center;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tooltip {
+  position: absolute;
+  top: 120%; /* Below bar */
+  transform: translateX(-50%);
+  background: #333;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+.tooltip::after {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent transparent #333 transparent;
 }
 
 .input-group {
