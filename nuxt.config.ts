@@ -14,7 +14,11 @@ export default defineNuxtConfig({
     manifest: {
       name: "Todo & Don't List",
       short_name: "TodoDont",
-      theme_color: '#ffffff',
+      theme_color: '#42b883',
+      background_color: '#ffffff',
+      display: 'standalone',
+      start_url: '/todo-dont-list/',
+      scope: '/todo-dont-list/',
       icons: [
         {
           src: 'pwa-192x192.png',
@@ -29,7 +33,7 @@ export default defineNuxtConfig({
       ],
     },
     workbox: {
-      navigateFallback: '/',
+      navigateFallback: null,
       globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
     },
     client: {
