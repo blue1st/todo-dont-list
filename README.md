@@ -3,6 +3,8 @@
 「やるべきこと（Todo）」と「やってはいけないこと（Don't）」を管理するためのシンプルなアプリケーションです。
 Nuxt 3 で構築されており、PWA（Progressive Web App）として動作するため、オフラインでも利用可能です。
 
+[Application URL](https://blue1st.github.io/todo-dont-list/)
+
 ## 特徴
 
 - **Todo (Do) タスクの管理**: 通常のタスク管理機能です。完了したタスクにチェックを入れることができます。

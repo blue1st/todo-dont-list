@@ -60,6 +60,12 @@
     <div v-if="todos.length === 0" class="empty-state">
       No tasks yet. Add one above!
     </div>
+
+    <footer>
+      <a href="https://github.com/blue1st/todo-dont-list" target="_blank" rel="noopener noreferrer">
+        View on GitHub
+      </a>
+    </footer>
   </div>
 </template>
 
@@ -353,5 +359,23 @@ button:hover {
   .meta {
     display: none;
   }
+}
+
+footer {
+  margin-top: 2rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #888;
+  border-top: 1px solid #eee;
+  padding-top: 1rem;
+}
+
+footer a {
+  color: #42b883;
+  text-decoration: none;
+}
+
+footer a:hover {
+  text-decoration: underline;
 }
 </style>
