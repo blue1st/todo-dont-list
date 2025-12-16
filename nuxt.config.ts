@@ -4,6 +4,10 @@ export default defineNuxtConfig({
     baseURL: '/todo-dont-list/',
     head: {
       title: "Todo & Don't List",
+      link: [
+        { rel: 'icon', type: 'image/x-icon', href: '/todo-dont-list/favicon.ico' },
+        { rel: 'manifest', href: '/todo-dont-list/manifest.webmanifest' }
+      ]
     },
   },
   compatibilityDate: '2025-07-15',

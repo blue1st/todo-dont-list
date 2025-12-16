@@ -86,6 +86,16 @@ onMounted(() => {
   timerInterval = window.setInterval(() => {
     now.value = Date.now();
   }, 1000);
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/todo-dont-list/sw.js')
+      .then(registration => {
+        console.log('SW registered: ', registration);
+      })
+      .catch(registrationError => {
+        console.log('SW registration failed: ', registrationError);
+      });
+  }
 });
 
 onUnmounted(() => {
