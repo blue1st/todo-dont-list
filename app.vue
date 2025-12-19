@@ -59,32 +59,78 @@
     </div>
 
     <ul class="todo-list">
-      <li v-for="todo in todos" :key="todo.id" :class="{ done: todo.done, 'dont-task': todo.type === 'dont', suppressed: isSuppressed(todo) }">
-        <!-- Checkbox for 'Do' tasks -->
-        <input 
-          v-if="todo.type !== 'dont'"
-          type="checkbox" 
-          :checked="todo.done" 
-          @change="toggleTodo(todo)"
-        />
+      <li v-for="(todo, index) in todos" :key="todo.id" :class="{ done: todo.done, 'dont-task': todo.type === 'dont', suppressed: isSuppressed(todo), editing: editingId === todo.id }">
         
-        <!-- Action button for 'Dont' tasks -->
-        <button 
-          v-else
-          class="dont-btn"
-          :disabled="isSuppressed(todo)"
-          @click="toggleTodo(todo)"
-        >
-          {{ isSuppressed(todo) ? formatTime(getRemainingTime(todo)) : '🚫 Do Not' }}
-        </button>
+        <div v-if="editingId === todo.id" class="edit-mode">
+          <input 
+            ref="editTitleInput"
+            v-model="editTitle" 
+            @keydown.enter="handleEditKey"
+            @keydown.esc="cancelEdit"
+            class="edit-input"
+          />
+          <input 
+            v-if="todo.type === 'dont'"
+            v-model="editDuration"
+            @keydown.enter="handleEditKey"
+            @keydown.esc="cancelEdit"
+            class="edit-duration"
+            placeholder="30m"
+          />
+          <div class="edit-actions">
+            <button class="icon-btn save-btn" @click="saveEdit" title="Save">✅</button>
+            <button class="icon-btn cancel-btn" @click="cancelEdit" title="Cancel">❌</button>
+          </div>
+        </div>
 
-        <span class="title">
-          {{ todo.title }}
-          <span v-if="todo.type === 'dont'" class="meta">
-            ({{ todo.duration }}m suppression)
+        <template v-else>
+          <!-- Reordering Controls -->
+          <div class="order-controls">
+            <button 
+              class="icon-btn arrow-btn" 
+              :disabled="index === 0" 
+              @click="moveUp(index)"
+              title="Move Up"
+            >
+              ⬆️
+            </button>
+            <button 
+              class="icon-btn arrow-btn" 
+              :disabled="index === todos.length - 1" 
+              @click="moveDown(index)"
+              title="Move Down"
+            >
+              ⬇️
+            </button>
+          </div>
+
+          <!-- Checkbox for 'Do' tasks -->
+          <input 
+            v-if="todo.type !== 'dont'"
+            type="checkbox" 
+            :checked="todo.done" 
+            @change="toggleTodo(todo)"
+          />
+          
+          <!-- Action button for 'Dont' tasks -->
+          <button 
+            v-else
+            class="dont-btn"
+            :disabled="isSuppressed(todo)"
+            @click="toggleTodo(todo)"
+          >
+            {{ isSuppressed(todo) ? formatTime(getRemainingTime(todo)) : '🚫 Do Not' }}
+          </button>
+
+          <span class="title">
+            {{ todo.title }}
+            <span v-if="todo.type === 'dont'" class="meta">
+              ({{ todo.duration }}m suppression)
+            </span>
+            <button class="icon-btn edit-btn" @click="startEditing(todo)" title="Edit">✏️</button>
           </span>
-        </span>
-        <button class="delete-btn" @click="deleteTodo(todo.id!)">Delete</button>
+          <button class="delete-btn" @click="deleteTodo(todo.id!)">Delete</button>
+        </template>
       </li>
     </ul>
     
@@ -116,6 +162,10 @@ const newTodoTitle = ref('');
 const newTodoType = ref<'do' | 'dont'>('do');
 const newTodoDuration = ref<string>('30m'); // Default 30 mins
 const todos = ref<Todo[]>([]);
+const editingId = ref<number | null>(null);
+const editTitle = ref('');
+const editTitleInput = ref<HTMLInputElement | null>(null);
+const editDuration = ref('');
 const now = ref(Date.now());
 // Settings
 const startHour = ref(0);
@@ -235,7 +285,8 @@ onUnmounted(() => {
 });
 
 // Subscribe to liveQuery for real-time updates
-const todosObservable = liveQuery(() => db.todos.toArray());
+// Sort by order
+const todosObservable = liveQuery(() => db.todos.orderBy('order').toArray());
 const subscription = todosObservable.subscribe({
   next: (result) => {
     todos.value = result;
@@ -291,12 +342,17 @@ async function addTodo() {
   
   try {
     const duration = newTodoType.value === 'dont' ? parseDuration(newTodoDuration.value) : undefined;
+    
+    // Calculate new order: max order + 1
+    const lastTodo = await db.todos.orderBy('order').last();
+    const newOrder = lastTodo && lastTodo.order !== undefined ? lastTodo.order + 1 : 0;
 
     await db.todos.add({
       title: newTodoTitle.value,
       done: false,
       type: newTodoType.value,
-      duration: duration
+      duration: duration,
+      order: newOrder
     });
     newTodoTitle.value = '';
     // Reset defaults
@@ -327,6 +383,88 @@ async function deleteTodo(id: number) {
   } catch (error) {
     console.error('Failed to delete todo:', error);
   }
+}
+
+async function moveUp(index: number) {
+  if (index <= 0) return;
+  const current = todos.value[index];
+  const prev = todos.value[index - 1];
+  
+  if (!current || !prev) return;
+
+  // Swap orders
+  const currentOrder = current.order ?? 0;
+  const prevOrder = prev.order ?? 0;
+
+  // If orders are same (shouldn't happen often but possible), just decrement one
+  // Better: swap their order values
+  const newCurrentOrder = prevOrder;
+  const newPrevOrder = currentOrder;
+
+  await db.transaction('rw', db.todos, async () => {
+    await db.todos.update(current.id!, { order: newCurrentOrder });
+    await db.todos.update(prev.id!, { order: newPrevOrder });
+  });
+}
+
+async function moveDown(index: number) {
+  if (index >= todos.value.length - 1) return;
+  const current = todos.value[index];
+  const next = todos.value[index + 1];
+  
+  if (!current || !next) return;
+
+  const currentOrder = current.order ?? 0;
+  const nextOrder = next.order ?? 0;
+
+  const newCurrentOrder = nextOrder;
+  const newNextOrder = currentOrder;
+
+  await db.transaction('rw', db.todos, async () => {
+    await db.todos.update(current.id!, { order: newCurrentOrder });
+    await db.todos.update(next.id!, { order: newNextOrder });
+  });
+}
+
+function startEditing(todo: Todo) {
+  editingId.value = todo.id!;
+  editTitle.value = todo.title;
+  editDuration.value = todo.duration ? todo.duration.toString() + 'm' : '30m';
+  // Wait for DOM update to focus
+  setTimeout(() => {
+    if (editTitleInput.value) {
+      editTitleInput.value.focus();
+    }
+  }, 50);
+}
+
+function cancelEdit() {
+  editingId.value = null;
+  editTitle.value = '';
+  editDuration.value = '';
+}
+
+async function saveEdit() {
+  if (editingId.value === null) return;
+  
+  const todo = todos.value.find(t => t.id === editingId.value);
+  if (!todo) return;
+
+  const updates: Partial<Todo> = {
+    title: editTitle.value
+  };
+
+  if (todo.type === 'dont') {
+    updates.duration = parseDuration(editDuration.value);
+  }
+
+  await db.todos.update(editingId.value, updates);
+  editingId.value = null;
+}
+
+async function handleEditKey(e: KeyboardEvent) {
+  if (e.isComposing) return;
+  await saveEdit();
 }
 </script>
 
@@ -588,5 +726,116 @@ footer a {
 
 footer a:hover {
   text-decoration: underline;
+}
+
+/* Button & Icon Styles */
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+.arrow-btn {
+  font-size: 1rem;
+  color: #666;
+}
+
+/* Order Controls */
+.order-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0; /* No gap */
+  margin-right: 4px;
+  visibility: hidden; /* Hide by default */
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.todo-list li:hover .order-controls {
+  visibility: visible;
+  opacity: 1;
+}
+
+.arrow-btn {
+  font-size: 0.8rem; /* Smaller font */
+  color: #ccc; /* Lighter color */
+  padding: 0 4px; /* Minimal padding */
+  line-height: 1; /* Tight line height */
+  height: 16px; /* Fixed small height */
+}
+
+.arrow-btn:hover {
+  color: #666; /* Darker on hover */
+  background: none; /* No background needed for clean look */
+}
+
+.arrow-btn:disabled {
+  opacity: 0; /* Hide completely if disabled */
+  cursor: default;
+}
+.edit-mode {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  align-items: center;
+}
+
+.edit-input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #42b883;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.edit-duration {
+  width: 60px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.todo-list li.editing {
+  background-color: #fcfcfc;
+  border-color: #42b883;
+}
+
+.edit-btn {
+  opacity: 0;
+  transition: opacity 0.2s;
+  margin-left: auto;
+}
+
+.todo-list li:hover .edit-btn {
+  opacity: 1;
+}
+
+/* Adjustments */
+.title {
+  /* Ensure title takes available space */
+  overflow: hidden; 
+  text-overflow: ellipsis;
 }
 </style>
