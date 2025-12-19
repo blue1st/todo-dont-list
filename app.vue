@@ -129,7 +129,6 @@
             {{ todo.title }}
             <span v-if="todo.type === 'dont'" class="meta">
               <span class="desktop-text">({{ todo.duration }}m suppression)</span>
-              <span class="mobile-text">({{ todo.duration }}m)</span>
             </span>
             <button class="icon-btn edit-btn" @click="startEditing(todo)" title="Edit">✏️</button>
           </span>
@@ -716,6 +715,14 @@ button:hover {
   
   .task-input {
     flex: 1 1 100%;
+    margin-bottom: 4px;
+  }
+
+  .input-row select,
+  .duration-input,
+  .input-row button {
+    flex: 1;
+    min-width: 0;
   }
 
   .desktop-text {
