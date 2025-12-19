@@ -54,7 +54,10 @@
           class="duration-input"
           @keydown.enter="handleEnter"
         />
-        <button @click="addTodo">Add</button>
+        <button @click="addTodo">
+          <span class="desktop-text">Add</span>
+          <span class="mobile-text">➕</span>
+        </button>
       </div>
     </div>
 
@@ -125,11 +128,15 @@
           <span class="title">
             {{ todo.title }}
             <span v-if="todo.type === 'dont'" class="meta">
-              ({{ todo.duration }}m suppression)
+              <span class="desktop-text">({{ todo.duration }}m suppression)</span>
+              <span class="mobile-text">({{ todo.duration }}m)</span>
             </span>
             <button class="icon-btn edit-btn" @click="startEditing(todo)" title="Edit">✏️</button>
           </span>
-          <button class="delete-btn" @click="deleteTodo(todo.id!)">Delete</button>
+          <button class="delete-btn" @click="deleteTodo(todo.id!)">
+            <span class="desktop-text">Delete</span>
+            <span class="mobile-text">🗑️</span>
+          </button>
         </template>
       </li>
     </ul>
@@ -668,10 +675,16 @@ button:hover {
   background-color: #ff7675;
   padding: 6px 12px;
   font-size: 0.9rem;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 
 .delete-btn:hover {
   background-color: #d63031;
+}
+
+.todo-list li:hover .delete-btn {
+  opacity: 1;
 }
 
 .dont-btn {
@@ -705,7 +718,30 @@ button:hover {
     flex: 1 1 100%;
   }
 
-  .meta {
+  .desktop-text {
+    display: none;
+  }
+  
+  .mobile-text {
+    display: inline;
+  }
+
+  .edit-mode {
+    flex-wrap: wrap;
+  }
+
+  .edit-input {
+    flex: 1 1 100%;
+    margin-bottom: 8px;
+  }
+
+  .edit-actions {
+    margin-left: auto;
+  }
+}
+
+@media (min-width: 601px) {
+  .mobile-text {
     display: none;
   }
 }
