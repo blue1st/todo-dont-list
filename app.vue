@@ -35,6 +35,10 @@
 
     <div class="input-group">
       <div class="input-row">
+        <select v-model="newTodoType">
+          <option value="do">{{ isMobile ? '☑️' : '☑️ Do' }}</option>
+          <option value="dont">{{ isMobile ? '🚫' : "🚫 Don't" }}</option>
+        </select>
         <input 
           v-model="newTodoTitle" 
           @keydown.enter="handleEnter" 
@@ -42,10 +46,6 @@
           type="text"
           class="task-input"
         />
-        <select v-model="newTodoType">
-          <option value="do">Do</option>
-          <option value="dont">Don't</option>
-        </select>
         <input 
           v-if="newTodoType === 'dont'"
           v-model="newTodoDuration"
@@ -122,7 +122,8 @@
             :disabled="isSuppressed(todo)"
             @click="toggleTodo(todo)"
           >
-            {{ isSuppressed(todo) ? formatTime(getRemainingTime(todo)) : '🚫 Do Not' }}
+            <template v-if="isSuppressed(todo)">{{ formatTime(getRemainingTime(todo)) }}</template>
+            <template v-else>🚫<span class="desktop-text"> Don't</span></template>
           </button>
 
           <span class="title">
@@ -180,6 +181,11 @@ const endHour = ref(24);
 const endMinute = ref(0);
 const showSettings = ref(false);
 const showTooltip = ref(false);
+const isMobile = ref(false);
+
+const updateMobileStatus = () => {
+  isMobile.value = window.innerWidth <= 600;
+};
 
 const dayProgress = computed(() => {
   const date = new Date(now.value);
@@ -284,10 +290,13 @@ onMounted(() => {
         console.log('SW registration failed: ', registrationError);
       });
   }
+  updateMobileStatus();
+  window.addEventListener('resize', updateMobileStatus);
 });
 
 onUnmounted(() => {
   clearInterval(timerInterval);
+  window.removeEventListener('resize', updateMobileStatus);
 });
 
 // Subscribe to liveQuery for real-time updates
@@ -347,7 +356,7 @@ async function addTodo() {
   if (!newTodoTitle.value.trim()) return;
   
   try {
-    const duration = newTodoType.value === 'dont' ? parseDuration(newTodoDuration.value) : undefined;
+    const duration = newTodoType.value === 'dont' ? parseDuration(newTodoDuration.value || '') : undefined;
     
     // Calculate new order: max order + 1
     const lastTodo = await db.todos.orderBy('order').last();
