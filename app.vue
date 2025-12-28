@@ -146,8 +146,8 @@
             <span v-if="todo.type === 'do' && todo.dailyReset" class="meta reset-meta" title="Resets daily">
               🔄
             </span>
-            <button class="icon-btn edit-btn" @click="startEditing(todo)" title="Edit">✏️</button>
           </span>
+          <button class="icon-btn edit-btn" @click="startEditing(todo)" title="Edit">✏️</button>
           <button class="delete-btn" @click="deleteTodo(todo.id!)">
             <span class="desktop-text">Delete</span>
             <span class="mobile-text">🗑️</span>
