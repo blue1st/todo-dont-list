@@ -363,6 +363,7 @@ async function initSync() {
        // Check if we have permission still (mostly strictly need verify on interaction)
        // We'll trust the process: if read/write fails, we catch error and show UI
        startSyncLoops();
+       checkForUpdates();
     }
   }
 }
