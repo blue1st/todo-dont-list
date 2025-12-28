@@ -8,6 +8,7 @@ export interface Todo {
     duration?: number; // in minutes, for 'dont' tasks
     lastDone?: number; // timestamp, for 'dont' tasks
     order?: number; // for manual ordering
+    dailyReset?: boolean; // for 'do' tasks
 }
 
 export class MySubClassedDexie extends Dexie {
@@ -43,6 +44,10 @@ export class MySubClassedDexie extends Dexie {
                     todo.order = todo.id; // Default order is the ID
                 }
             });
+        });
+
+        this.version(4).stores({
+            todos: '++id, title, done, type, order, dailyReset'
         });
     }
 }

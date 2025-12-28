@@ -54,6 +54,13 @@
           class="duration-input"
           @keydown.enter="handleEnter"
         />
+        <div v-if="newTodoType === 'do'" class="daily-reset-wrapper" title="Reset this task every day at start time">
+           <label class="daily-reset-label">
+             <input type="checkbox" v-model="newTodoDailyReset">
+             <span class="desktop-text">Daily Reset</span>
+             <span class="mobile-text">🔄</span>
+           </label>
+        </div>
         <button @click="addTodo">
           <span class="desktop-text">Add</span>
           <span class="mobile-text">➕</span>
@@ -80,6 +87,11 @@
             class="edit-duration"
             placeholder="30m"
           />
+           <label v-if="todo.type === 'do'" class="edit-daily-reset">
+             <input type="checkbox" v-model="editDailyReset">
+             <span class="desktop-text">Daily Reset</span>
+             <span class="mobile-text">🔄</span>
+           </label>
           <div class="edit-actions">
             <button class="icon-btn save-btn" @click="saveEdit" title="Save">✅</button>
             <button class="icon-btn cancel-btn" @click="cancelEdit" title="Cancel">❌</button>
@@ -131,6 +143,9 @@
             <span v-if="todo.type === 'dont'" class="meta">
               <span class="desktop-text">({{ todo.duration }}m suppression)</span>
             </span>
+            <span v-if="todo.type === 'do' && todo.dailyReset" class="meta reset-meta" title="Resets daily">
+              🔄
+            </span>
             <button class="icon-btn edit-btn" @click="startEditing(todo)" title="Edit">✏️</button>
           </span>
           <button class="delete-btn" @click="deleteTodo(todo.id!)">
@@ -168,11 +183,13 @@ import { computed } from 'vue';
 const newTodoTitle = ref('');
 const newTodoType = ref<'do' | 'dont'>('do');
 const newTodoDuration = ref<string>('30m'); // Default 30 mins
+const newTodoDailyReset = ref(false); 
 const todos = ref<Todo[]>([]);
 const editingId = ref<number | null>(null);
 const editTitle = ref('');
 const editTitleInput = ref<HTMLInputElement | null>(null);
 const editDuration = ref('');
+const editDailyReset = ref(false);
 const now = ref(Date.now());
 // Settings
 const startHour = ref(0);
@@ -279,7 +296,18 @@ onMounted(() => {
 
   timerInterval = window.setInterval(() => {
     now.value = Date.now();
+    checkDailyResets();
   }, 1000);
+
+  // Initial check
+  checkDailyResets();
+  
+  // Check when visible
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      checkDailyResets();
+    }
+  });
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/todo-dont-list/sw.js')
@@ -367,12 +395,15 @@ async function addTodo() {
       done: false,
       type: newTodoType.value,
       duration: duration,
-      order: newOrder
+      order: newOrder,
+      dailyReset: newTodoType.value === 'do' ? newTodoDailyReset.value : undefined,
+      lastDone: newTodoType.value === 'do' ? undefined : undefined // For do tasks, it's set on toggle
     });
     newTodoTitle.value = '';
     // Reset defaults
     newTodoType.value = 'do';
     newTodoDuration.value = '30m';
+    newTodoDailyReset.value = false;
   } catch (error) {
     console.error('Failed to add todo:', error);
   }
@@ -385,7 +416,12 @@ async function toggleTodo(todo: Todo) {
       await db.todos.update(todo.id!, { lastDone: Date.now() });
     } else {
       // For 'do' tasks, normal toggle
-      await db.todos.update(todo.id!, { done: !todo.done });
+      // If turning ON (done=true), mark timestamp
+      const newDone = !todo.done;
+      await db.todos.update(todo.id!, { 
+        done: newDone,
+        lastDone: newDone ? Date.now() : todo.lastDone 
+      });
     }
   } catch (error) {
     console.error('Failed to toggle todo:', error);
@@ -445,6 +481,7 @@ function startEditing(todo: Todo) {
   editingId.value = todo.id!;
   editTitle.value = todo.title;
   editDuration.value = todo.duration ? todo.duration.toString() + 'm' : '30m';
+  editDailyReset.value = !!todo.dailyReset;
   // Wait for DOM update to focus
   setTimeout(() => {
     if (editTitleInput.value) {
@@ -457,6 +494,7 @@ function cancelEdit() {
   editingId.value = null;
   editTitle.value = '';
   editDuration.value = '';
+  editDailyReset.value = false;
 }
 
 async function saveEdit() {
@@ -471,6 +509,8 @@ async function saveEdit() {
 
   if (todo.type === 'dont') {
     updates.duration = parseDuration(editDuration.value);
+  } else {
+    updates.dailyReset = editDailyReset.value;
   }
 
   await db.todos.update(editingId.value, updates);
@@ -480,6 +520,31 @@ async function saveEdit() {
 async function handleEditKey(e: KeyboardEvent) {
   if (e.isComposing) return;
   await saveEdit();
+}
+
+function checkDailyResets() {
+  const nowTime = now.value;
+  const date = new Date(nowTime);
+  let currentCycleStart = new Date(date);
+  currentCycleStart.setHours(startHour.value, startMinute.value, 0, 0);
+
+  // If current time is BEFORE the start time today, then the "cycle" actually started yesterday.
+  // E.g. Start 6AM. Now 5AM. Cycle Start -> Yesterday 6AM.
+  if (date < currentCycleStart) {
+      currentCycleStart.setDate(currentCycleStart.getDate() - 1);
+  }
+  
+  const cycleStartTime = currentCycleStart.getTime();
+
+  todos.value.forEach(async (todo) => {
+    if (todo.type === 'do' && todo.dailyReset && todo.done && todo.lastDone) {
+      // If the task was done BEFORE the current cycle started, it should be reset.
+      if (todo.lastDone < cycleStartTime) {
+         console.log(`Resetting task: ${todo.title}`);
+         await db.todos.update(todo.id!, { done: false });
+      }
+    }
+  });
 }
 </script>
 
@@ -620,6 +685,40 @@ select, .duration-input {
   border: 2px solid #e0e0e0;
   border-radius: 8px;
   background: white;
+}
+
+.daily-reset-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 0 12px;
+}
+
+.daily-reset-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #555;
+  white-space: nowrap;
+}
+
+.reset-meta {
+  background: #e1f5fe;
+  color: #0288d1;
+}
+
+.edit-daily-reset {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.9rem;
+  margin-left: 10px;
+  cursor: pointer;
 }
 
 .duration-input {
