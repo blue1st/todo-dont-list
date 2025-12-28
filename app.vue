@@ -403,8 +403,34 @@ async function pickFile() {
     syncFileHandle.value = handle;
     syncEnabled.value = true;
     await setSyncSettings(true, handle);
+    
+    // Check if file exists and has content
+    let startFresh = true;
+    try {
+        const file = await handle.getFile();
+        if (file.size > 0) {
+            if (confirm('The selected file is not empty. Do you want to load data from it? (Cancel will overwrite it)')) {
+                // Load from file
+                const externalTodos = await loadFromFile();
+                if (externalTodos) {
+                    await db.transaction('rw', db.todos, async () => {
+                        await db.todos.clear();
+                        await db.todos.bulkAdd(externalTodos);
+                    });
+                    startFresh = false;
+                    syncStatus.value = 'Synced';
+                    lastLoadedTime.value = Date.now();
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error checking file content:', e);
+    }
+
     startSyncLoops();
-    await saveData(); // Initial save
+    if (startFresh) {
+        await saveData(); // Initial save (Overwrite)
+    }
     syncStatus.value = 'Synced';
   } catch (err: any) {
     if (err.name !== 'AbortError') {
@@ -418,6 +444,7 @@ async function pickFile() {
     }
   }
 }
+
 
 // Watch for changes and save
 import { watch } from 'vue';
