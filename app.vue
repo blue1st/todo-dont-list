@@ -740,6 +740,62 @@ button:hover {
   background-color: #3aa876;
 }
 
+/* Specific styling for input row items for grid layout compatibility */
+.input-row > select {
+  grid-area: select;
+}
+
+.task-input {
+  grid-area: title;
+}
+
+.duration-input, .daily-reset-wrapper {
+  grid-area: extra;
+}
+
+.input-row > button {
+  grid-area: button;
+}
+
+@media (max-width: 600px) {
+  .input-row {
+    display: grid;
+    grid-template-areas:
+      "select extra"
+      "title title"
+      "button button";
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  
+  .input-row > select,
+  .task-input,
+  .duration-input,
+  .daily-reset-wrapper,
+  .input-row > button {
+    width: 100%;
+    margin: 0;
+    box-sizing: border-box; /* Ensure padding doesn't overflow width */
+  }
+
+  /* Make sure select and extra inputs match height/alignment */
+  .input-row > select {
+    height: 46px; /* Match typical input height */
+  }
+
+  /* Ensure daily reset wrapper fits well */
+  .daily-reset-wrapper {
+      justify-content: center;
+      height: 46px; /* Match input height */
+  }
+  
+  /* Full width button */
+  .input-row > button {
+     width: 100%;
+  }
+}
+
+
 .todo-list {
   list-style: none;
   padding: 0;
