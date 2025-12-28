@@ -9,6 +9,16 @@
       </div>
       
       <div v-if="showSettings" class="settings-panel">
+        <div class="setting-group sync-group">
+          <label class="sync-label">
+            <input type="checkbox" v-model="syncEnabled" @change="toggleSync"> Use Local File
+          </label>
+          <div v-if="syncEnabled" class="sync-controls">
+             <span class="sync-status" :class="syncStatus.toLowerCase().replace(' ', '-')">{{ syncStatus }}</span>
+             <button v-if="syncStatus === 'Permission needed'" @click="requestPerm" class="sm-btn">Authorize</button>
+             <button v-if="syncFileHandle" @click="pickFile" class="sm-btn" title="Change file">📂</button>
+          </div>
+        </div>
         <div class="setting-group">
           <label>Start:</label>
           <input type="number" v-model="startHour" @change="saveSettings" min="0" max="23" class="time-input"> :
@@ -172,6 +182,14 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useHead } from '#app';
 import { db, type Todo } from './utils/db';
+import { 
+  getSyncSettings, 
+  setSyncSettings, 
+  saveToFile, 
+  loadFromFile, 
+  getFileLastModified,
+  verifyPermission
+} from './utils/fileSync';
 
 useHead({
   title: "Todo & Don't List"
@@ -319,8 +337,167 @@ onMounted(() => {
       });
   }
   updateMobileStatus();
+  updateMobileStatus();
   window.addEventListener('resize', updateMobileStatus);
+
+  // Initialize Sync
+  initSync();
 });
+
+// --- File Sync Logic ---
+const syncEnabled = ref(false);
+const syncStatus = ref<string>('Idle');
+const syncFileHandle = ref<FileSystemFileHandle | undefined>(undefined);
+const lastLoadedTime = ref(0);
+let syncCheckInterval: number;
+let saveTimeout: number;
+
+async function initSync() {
+  const settings = await getSyncSettings();
+  if (settings) {
+    syncEnabled.value = settings.syncEnabled;
+    syncFileHandle.value = settings.fileHandle;
+    if (syncEnabled.value && syncFileHandle.value) {
+       // Check if we have permission still (mostly strictly need verify on interaction)
+       // We'll trust the process: if read/write fails, we catch error and show UI
+       startSyncLoops();
+    }
+  }
+}
+
+async function toggleSync() {
+  // If enabling and no file selected, trigger picker
+  if (syncEnabled.value && !syncFileHandle.value) {
+    await pickFile();
+  } else {
+    // Just save the state
+    await setSyncSettings(syncEnabled.value, syncFileHandle.value);
+    if (syncEnabled.value) {
+        startSyncLoops();
+        // Try initial save to ensure consistency
+        saveData();
+    } else {
+        stopSyncLoops();
+        syncStatus.value = 'Disabled';
+    }
+  }
+}
+
+async function pickFile() {
+  try {
+    // Check if API is supported
+    if (!('showSaveFilePicker' in window)) {
+        alert('Your browser does not support the File System Access API.');
+        syncEnabled.value = false;
+        return;
+    }
+
+    const handle = await (window as any).showSaveFilePicker({
+        suggestedName: 'todos.json',
+        types: [{
+            description: 'JSON Files',
+            accept: {'application/json': ['.json']},
+        }],
+    });
+    
+    syncFileHandle.value = handle;
+    syncEnabled.value = true;
+    await setSyncSettings(true, handle);
+    startSyncLoops();
+    await saveData(); // Initial save
+    syncStatus.value = 'Synced';
+  } catch (err: any) {
+    if (err.name !== 'AbortError') {
+        console.error(err);
+        alert('Failed to select file');
+    } else {
+        // User cancelled, if they were enabling, revert
+        if (!syncFileHandle.value) {
+            syncEnabled.value = false;
+        }
+    }
+  }
+}
+
+// Watch for changes and save
+import { watch } from 'vue';
+watch(todos, () => {
+    if (!syncEnabled.value || !syncFileHandle.value) return;
+    
+    syncStatus.value = 'Waiting to save...';
+    clearTimeout(saveTimeout);
+    saveTimeout = window.setTimeout(saveData, 2000);
+}, { deep: true });
+
+async function saveData() {
+    if (!syncEnabled.value || !syncFileHandle.value) return;
+    
+    syncStatus.value = 'Saving...';
+    try {
+        await saveToFile(todos.value);
+        syncStatus.value = 'Synced';
+        lastLoadedTime.value = Date.now(); // We just wrote it, so we are up to date
+    } catch (e) {
+        console.error(e);
+        syncStatus.value = 'Error saving';
+        // Check permission?
+        const hasPerm = await verifyPermission(syncFileHandle.value, true);
+        if (!hasPerm) syncStatus.value = 'Permission needed';
+    }
+}
+
+function startSyncLoops() {
+    stopSyncLoops();
+    syncCheckInterval = window.setInterval(checkForUpdates, 5000);
+}
+
+function stopSyncLoops() {
+    clearInterval(syncCheckInterval);
+    clearTimeout(saveTimeout);
+}
+
+async function checkForUpdates() {
+    if (!syncEnabled.value || !syncFileHandle.value) return;
+
+    try {
+        const lastMod = await getFileLastModified();
+        if (lastMod && lastMod > lastLoadedTime.value + 1000) { 
+             // File is newer (buffer 1s)
+             // We should debounce this too or pause saving?
+             // Simplest: just load
+             syncStatus.value = 'Reloading from file...';
+             const externalTodos = await loadFromFile();
+             if (externalTodos) {
+                 // Update DB 
+                 await db.transaction('rw', db.todos, async () => {
+                     await db.todos.clear();
+                     await db.todos.bulkAdd(externalTodos);
+                 });
+                 // UI will update via liveQuery
+                 lastLoadedTime.value = Date.now(); // Or lastMod? lastMod is better but clock skew... use Now
+                 syncStatus.value = 'Synced';
+             }
+        }
+    } catch (e) {
+        console.error('Check update failed', e);
+        // Maybe permission lost
+        const hasPerm = await verifyPermission(syncFileHandle.value, false);
+        if (!hasPerm) syncStatus.value = 'Permission needed';
+    }
+}
+
+async function requestPerm() {
+    if (syncFileHandle.value) {
+        // Just verify with true for verifyPermission to trigger request
+        // Actually verifyPermission in fileSync does requestPermission if query fails
+        const result = await verifyPermission(syncFileHandle.value, true);
+        if (result) {
+            syncStatus.value = 'Synced'; // Retry sync?
+            checkForUpdates();
+        }
+    }
+}
+
 
 onUnmounted(() => {
   clearInterval(timerInterval);
@@ -617,6 +794,41 @@ h1 {
   padding: 8px;
   border-radius: 4px;
   align-items: center;
+}
+
+.sync-group {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.sync-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+.sync-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sync-status {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.sync-status.synced { color: green; }
+.sync-status.error-saving { color: red; }
+.sync-status.permission-needed { color: orange; }
+
+.sm-btn {
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    background: #e0e0e0;
+    color: #333;
+    border-radius: 4px;
 }
 
 .setting-group {

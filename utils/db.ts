@@ -11,8 +11,15 @@ export interface Todo {
     dailyReset?: boolean; // for 'do' tasks
 }
 
+export interface SyncSettings {
+    id: string; // 'config'
+    syncEnabled: boolean;
+    fileHandle?: FileSystemFileHandle;
+}
+
 export class MySubClassedDexie extends Dexie {
     todos!: Table<Todo>;
+    settings!: Table<SyncSettings>;
 
     constructor() {
         super('myDatabase');
@@ -48,6 +55,10 @@ export class MySubClassedDexie extends Dexie {
 
         this.version(4).stores({
             todos: '++id, title, done, type, order, dailyReset'
+        });
+
+        this.version(5).stores({
+            settings: 'id'
         });
     }
 }
