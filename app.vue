@@ -81,12 +81,18 @@
     </div>
 
     <ul class="todo-list">
-      <li v-for="(todo, index) in todos" :key="todo.id" :class="{ done: todo.done, 'dont-task': todo.type === 'dont', suppressed: isSuppressed(todo), editing: editingId === todo.id }">
+      <li 
+        v-for="(todo, index) in todos" 
+        :key="todo.id" 
+        :class="{ done: todo.done, 'dont-task': todo.type === 'dont', suppressed: isSuppressed(todo), editing: editingId === todo.id }"
+        @click="handleTaskClick(todo)"
+      >
         
         <div v-if="editingId === todo.id" class="edit-mode">
           <input 
             ref="editTitleInput"
             v-model="editTitle" 
+            @click.stop
             @keydown.enter="handleEditKey"
             @keydown.esc="cancelEdit"
             class="edit-input"
@@ -94,19 +100,20 @@
           <input 
             v-if="todo.type === 'dont'"
             v-model="editDuration"
+            @click.stop
             @keydown.enter="handleEditKey"
             @keydown.esc="cancelEdit"
             class="edit-duration"
             placeholder="30m"
           />
-           <label v-if="todo.type === 'do'" class="edit-daily-reset">
+           <label v-if="todo.type === 'do'" class="edit-daily-reset" @click.stop>
              <input type="checkbox" v-model="editDailyReset">
              <span class="desktop-text">Daily Reset</span>
              <span class="mobile-text">🔄</span>
            </label>
           <div class="edit-actions">
-            <button class="icon-btn save-btn" @click="saveEdit" title="Save">✅</button>
-            <button class="icon-btn cancel-btn" @click="cancelEdit" title="Cancel">❌</button>
+            <button class="icon-btn save-btn" @click.stop="saveEdit" title="Save">✅</button>
+            <button class="icon-btn cancel-btn" @click.stop="cancelEdit" title="Cancel">❌</button>
           </div>
         </div>
 
@@ -116,7 +123,7 @@
             <button 
               class="icon-btn arrow-btn" 
               :disabled="index === 0" 
-              @click="moveUp(index)"
+              @click.stop="moveUp(index)"
               title="Move Up"
             >
               ⬆️
@@ -124,7 +131,7 @@
             <button 
               class="icon-btn arrow-btn" 
               :disabled="index === todos.length - 1" 
-              @click="moveDown(index)"
+              @click.stop="moveDown(index)"
               title="Move Down"
             >
               ⬇️
@@ -137,6 +144,7 @@
             type="checkbox" 
             :checked="todo.done" 
             @change="toggleTodo(todo)"
+            @click.stop
           />
           
           <!-- Action button for 'Dont' tasks -->
@@ -144,7 +152,7 @@
             v-else
             class="dont-btn"
             :disabled="isSuppressed(todo)"
-            @click="toggleTodo(todo)"
+            @click.stop="toggleTodo(todo)"
           >
             <template v-if="isSuppressed(todo)">{{ formatTime(getRemainingTime(todo)) }}</template>
             <template v-else>🚫<span class="desktop-text"> Don't</span></template>
@@ -159,8 +167,8 @@
               🔄
             </span>
           </span>
-          <button class="icon-btn edit-btn" @click="startEditing(todo)" title="Edit">✏️</button>
-          <button class="delete-btn" @click="deleteTodo(todo.id!)">
+          <button class="icon-btn edit-btn" @click.stop="startEditing(todo)" title="Edit">✏️</button>
+          <button class="delete-btn" @click.stop="deleteTodo(todo.id!)">
             <span class="desktop-text">Delete</span>
             <span class="mobile-text">🗑️</span>
           </button>
@@ -170,6 +178,33 @@
     
     <div v-if="todos.length === 0" class="empty-state">
       No tasks yet. Add one above!
+    </div>
+    
+    <!-- Mobile Popup Menu -->
+    <div v-if="showMobileMenu && selectedTodo" class="mobile-menu-overlay" @click.self="closeMobileMenu">
+      <div class="mobile-menu">
+        <h3>{{ selectedTodo.title }}</h3>
+        
+        <button class="menu-item" @click="handleMenuAction('moveUp')">
+          <span class="menu-icon">⬆️</span> Move Up
+        </button>
+        
+        <button class="menu-item" @click="handleMenuAction('moveDown')">
+          <span class="menu-icon">⬇️</span> Move Down
+        </button>
+        
+        <button class="menu-item" @click="handleMenuAction('edit')">
+          <span class="menu-icon">✏️</span> Edit
+        </button>
+        
+        <button class="menu-item delete" @click="handleMenuAction('delete')">
+          <span class="menu-icon">🗑️</span> Delete
+        </button>
+
+        <button class="menu-item" @click="closeMobileMenu" style="justify-content: center; background: white; border: 1px solid #ccc;">
+          Cancel
+        </button>
+      </div>
     </div>
 
     <footer>
@@ -219,10 +254,46 @@ const endMinute = ref(0);
 const showSettings = ref(false);
 const showTooltip = ref(false);
 const isMobile = ref(false);
+const showMobileMenu = ref(false);
+const selectedTodo = ref<Todo | null>(null);
 
 const updateMobileStatus = () => {
   isMobile.value = window.innerWidth <= 600;
 };
+
+function handleTaskClick(todo: Todo) {
+  if (isMobile.value && editingId.value !== todo.id) {
+    selectedTodo.value = todo;
+    showMobileMenu.value = true;
+  }
+}
+
+function closeMobileMenu() {
+  showMobileMenu.value = false;
+  selectedTodo.value = null;
+}
+
+function handleMenuAction(action: 'moveUp' | 'moveDown' | 'edit' | 'delete') {
+  if (!selectedTodo.value) return;
+  const index = todos.value.findIndex(t => t.id === selectedTodo.value?.id);
+  
+  switch(action) {
+    case 'moveUp':
+      if (index > 0) moveUp(index);
+      break;
+    case 'moveDown':
+      if (index < todos.value.length - 1) moveDown(index);
+      break;
+    case 'edit':
+      startEditing(selectedTodo.value);
+      break;
+    case 'delete':
+      deleteTodo(selectedTodo.value.id!);
+      break;
+  }
+  closeMobileMenu();
+}
+
 
 const dayProgress = computed(() => {
   const date = new Date(now.value);
@@ -1298,4 +1369,101 @@ footer a:hover {
   overflow: hidden; 
   text-overflow: ellipsis;
 }
+
+/* Mobile Menu Overlay */
+.mobile-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end; /* Bottom sheet style or center? User said "Popup", center might be standard or bottom sheet. Let's do center for now as it 'popup'. */
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s;
+}
+
+.mobile-menu {
+  background: white;
+  width: 80%;
+  max-width: 300px;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  animation: slideUp 0.2s;
+}
+
+.mobile-menu h3 {
+  margin: 0 0 10px 0;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f8f9fa;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #333;
+  transition: background 0.2s;
+}
+
+.menu-item:hover {
+  background: #e9ecef;
+}
+
+.menu-item.delete {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.menu-item.delete:hover {
+  background: #ffcdd2;
+}
+
+.menu-icon {
+  font-size: 1.2rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 600px) {
+  /* Hide desktop controls on mobile */
+  .order-controls,
+  .edit-btn,
+  .delete-btn {
+    display: none !important;
+  }
+  
+  /* Make list item look clickable */
+  .todo-list li {
+    cursor: pointer;
+  }
+  
+  .todo-list li:active {
+    background-color: #f0f0f0;
+  }
+}
+
 </style>
