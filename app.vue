@@ -1,34 +1,36 @@
 <template>
   <div class="container">
-    <h1>Todo & Don't List</h1>
-    
+    <div class="header">
+      <h1>Todo & Don't List</h1>
+      <span @click="showSettings = !showSettings" class="settings-toggle" title="Settings">⚙️</span>
+    </div>
+
+    <div v-if="showSettings" class="settings-panel">
+      <div class="setting-group sync-group">
+        <label class="sync-label">
+          <input type="checkbox" v-model="syncEnabled" @change="toggleSync"> Use Local File
+        </label>
+        <div v-if="syncEnabled" class="sync-controls">
+           <span class="sync-status" :class="syncStatus.toLowerCase().replace(' ', '-')">{{ syncStatus }}</span>
+           <button v-if="syncStatus === 'Permission needed'" @click="requestPerm" class="sm-btn">Authorize</button>
+           <button v-if="syncFileHandle" @click="pickFile" class="sm-btn" title="Change file">📂</button>
+        </div>
+      </div>
+      <div class="setting-group">
+        <label>Start:</label>
+        <input type="number" v-model="startHour" @change="saveSettings" min="0" max="23" class="time-input"> :
+        <input type="number" v-model="startMinute" @change="saveSettings" min="0" max="59" class="time-input">
+      </div>
+      <div class="setting-group">
+        <label>End:</label>
+        <input type="number" v-model="endHour" @change="saveSettings" min="1" max="30" class="time-input"> :
+        <input type="number" v-model="endMinute" @change="saveSettings" min="0" max="59" class="time-input">
+      </div>
+    </div>
+
     <div class="progress-section">
       <div class="progress-label">
-        <span @click="showSettings = !showSettings" class="settings-toggle" title="Settings">⚙️</span>
         Day Progress: {{ Math.round(dayProgress) }}%
-      </div>
-      
-      <div v-if="showSettings" class="settings-panel">
-        <div class="setting-group sync-group">
-          <label class="sync-label">
-            <input type="checkbox" v-model="syncEnabled" @change="toggleSync"> Use Local File
-          </label>
-          <div v-if="syncEnabled" class="sync-controls">
-             <span class="sync-status" :class="syncStatus.toLowerCase().replace(' ', '-')">{{ syncStatus }}</span>
-             <button v-if="syncStatus === 'Permission needed'" @click="requestPerm" class="sm-btn">Authorize</button>
-             <button v-if="syncFileHandle" @click="pickFile" class="sm-btn" title="Change file">📂</button>
-          </div>
-        </div>
-        <div class="setting-group">
-          <label>Start:</label>
-          <input type="number" v-model="startHour" @change="saveSettings" min="0" max="23" class="time-input"> :
-          <input type="number" v-model="startMinute" @change="saveSettings" min="0" max="59" class="time-input">
-        </div>
-        <div class="setting-group">
-          <label>End:</label>
-          <input type="number" v-model="endHour" @change="saveSettings" min="1" max="30" class="time-input"> :
-          <input type="number" v-model="endMinute" @change="saveSettings" min="0" max="59" class="time-input">
-        </div>
       </div>
 
       <div 
@@ -770,10 +772,19 @@ body {
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
+.header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  margin-bottom: 1rem;
+}
+
 h1 {
   text-align: center;
   color: #2c3e50;
-  margin-bottom: 1rem;
+  margin: 0;
+  flex-grow: 1;
 }
 
 .progress-section {
@@ -806,21 +817,23 @@ h1 {
 }
 
 .settings-toggle {
+  position: absolute;
+  right: 0;
   cursor: pointer;
-  margin-right: 5px;
   user-select: none;
+  font-size: 1.2rem;
 }
 
 .settings-panel {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: 15px;
-  margin-bottom: 8px;
+  margin-bottom: 1.5rem;
   font-size: 0.9rem;
-  background: #f8f8f8;
-  padding: 8px;
-  border-radius: 4px;
-  align-items: center;
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
 }
 
 .sync-group {
