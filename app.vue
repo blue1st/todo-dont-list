@@ -14,6 +14,7 @@
            <span class="sync-status" :class="syncStatus.toLowerCase().replace(' ', '-')">{{ syncStatus }}</span>
            <button v-if="syncStatus === 'Permission needed'" @click="requestPerm" class="sm-btn">Authorize</button>
            <button v-if="syncFileHandle" @click="pickFile" class="sm-btn" title="Change file">📂</button>
+           <button v-if="syncFileHandle" @click="manualLoadFromFile" class="sm-btn" title="Reload from file">📥</button>
         </div>
       </div>
       <div class="setting-group">
@@ -517,6 +518,32 @@ async function pickFile() {
         }
     }
   }
+}
+
+async function manualLoadFromFile() {
+    if (!syncEnabled.value || !syncFileHandle.value) return;
+
+    if (!confirm('Are you sure you want to load from file? Current data will be replaced.')) return;
+
+    try {
+        syncStatus.value = 'Reloading...';
+        const externalTodos = await loadFromFile();
+        if (externalTodos) {
+            await db.transaction('rw', db.todos, async () => {
+                await db.todos.clear();
+                await db.todos.bulkAdd(externalTodos);
+            });
+            lastLoadedTime.value = Date.now();
+            syncStatus.value = 'Synced';
+        } else {
+             syncStatus.value = 'Error reading file';
+        }
+    } catch (e) {
+        console.error('Manual load failed', e);
+        syncStatus.value = 'Error reading file';
+        const hasPerm = await verifyPermission(syncFileHandle.value, false);
+        if (!hasPerm) syncStatus.value = 'Permission needed';
+    }
 }
 
 
